@@ -15,5 +15,8 @@ venv/
 dist/
 build/
 
+# Local native dev servers (Postgres/Redis data dirs — sandbox only)
+.devdata/
+
 # OS / editor
 .DS_Store

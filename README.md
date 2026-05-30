@@ -23,6 +23,11 @@ Then run the full gate:
 make check                # lint + typecheck + tests
 ```
 
+**Port already in use?** If `5432` (or `6379`) is taken — e.g. you already run
+Postgres locally — set `POSTGRES_PORT` (and/or `REDIS_PORT`) in `.env` to a
+free port and re-run `make dev`. That one var drives both the published
+container port and what the app connects to, so nothing else needs changing.
+
 `make help` lists every target. The manual equivalents, if you'd rather not
 use `make`:
 

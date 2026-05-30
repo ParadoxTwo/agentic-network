@@ -26,6 +26,8 @@ REDISDATA="$ROOT/.devdata/redis"
 PGUSER="${POSTGRES_USER:-agentic}"
 PGDB="${POSTGRES_DB:-agentic}"
 PGPASS="${POSTGRES_PASSWORD:-devpass}"
+PGPORT="${POSTGRES_PORT:-5432}"
+REDISPORT="${REDIS_PORT:-6379}"
 
 # Postgres refuses to run as root; run its commands as the postgres user
 # when we are root, otherwise as the current user.
@@ -40,32 +42,32 @@ up() {
     echo "initdb…"
     pg initdb -D "$PGDATA" -U "$PGUSER" --auth=trust >/tmp/initdb.log 2>&1
   fi
-  if pg_isready -q -h 127.0.0.1 -p 5432 -U "$PGUSER" 2>/dev/null; then
+  if pg_isready -q -h 127.0.0.1 -p "$PGPORT" -U "$PGUSER" 2>/dev/null; then
     echo "postgres already running"
   else
-    echo "starting postgres on 127.0.0.1:5432…"
+    echo "starting postgres on 127.0.0.1:$PGPORT…"
     pg pg_ctl -D "$PGDATA" -l /tmp/pg.log \
-      -o "-c listen_addresses=127.0.0.1 -p 5432" -w start
+      -o "-c listen_addresses=127.0.0.1 -p $PGPORT" -w start
   fi
-  createdb -h 127.0.0.1 -p 5432 -U "$PGUSER" "$PGDB" 2>/dev/null \
+  createdb -h 127.0.0.1 -p "$PGPORT" -U "$PGUSER" "$PGDB" 2>/dev/null \
     && echo "created db $PGDB" || echo "db $PGDB exists"
-  psql -h 127.0.0.1 -p 5432 -U "$PGUSER" -d "$PGDB" -q \
+  psql -h 127.0.0.1 -p "$PGPORT" -U "$PGUSER" -d "$PGDB" -q \
     -c "ALTER ROLE $PGUSER WITH PASSWORD '$PGPASS';"
 
-  echo "starting redis on 127.0.0.1:6379…"
+  echo "starting redis on 127.0.0.1:$REDISPORT…"
   redis-server --daemonize yes --appendonly yes --dir "$REDISDATA" \
-    --bind 127.0.0.1 --port 6379 --logfile /tmp/redis.log
+    --bind 127.0.0.1 --port "$REDISPORT" --logfile /tmp/redis.log
   status
 }
 
 status() {
-  pg_isready -h 127.0.0.1 -p 5432 -U "$PGUSER" || true
-  printf 'redis: '; redis-cli -h 127.0.0.1 -p 6379 ping || true
+  pg_isready -h 127.0.0.1 -p "$PGPORT" -U "$PGUSER" || true
+  printf 'redis: '; redis-cli -h 127.0.0.1 -p "$REDISPORT" ping || true
 }
 
 down() {
   pg pg_ctl -D "$PGDATA" -m fast stop 2>/dev/null && echo "postgres stopped" || echo "postgres not running"
-  redis-cli -h 127.0.0.1 -p 6379 shutdown nosave 2>/dev/null && echo "redis stopped" || echo "redis not running"
+  redis-cli -h 127.0.0.1 -p "$REDISPORT" shutdown nosave 2>/dev/null && echo "redis stopped" || echo "redis not running"
 }
 
 nuke() { down || true; rm -rf "$ROOT/.devdata"; echo "wiped .devdata"; }

@@ -23,9 +23,12 @@ services:
       # ship a known credential. Container refuses to start without it.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     ports:
-      # Exposed on localhost only for local dev (psql, tests). On a real
-      # VPS, drop this block so Postgres stays on the internal network.
-      - "127.0.0.1:5432:5432"
+      # host POSTGRES_PORT -> container 5432. Change POSTGRES_PORT in .env if
+      # 5432 is already taken (e.g. a Postgres already running on your box);
+      # store/db.py reads the same var, so the app follows automatically.
+      # Exposed on localhost only for dev — drop this block on a VPS so
+      # Postgres stays on the internal network.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -46,8 +49,9 @@ services:
     # (see deployment.md "Backups & ops").
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      # Localhost-only for dev; remove on the VPS to keep Redis internal.
-      - "127.0.0.1:6379:6379"
+      # host REDIS_PORT -> container 6379. Localhost-only for dev; remove on
+      # the VPS to keep Redis internal.
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
     healthcheck:

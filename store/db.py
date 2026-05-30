@@ -16,8 +16,6 @@ import redis
 
 _SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 
-DEFAULT_REDIS_URL = "redis://127.0.0.1:6379/0"
-
 
 def database_url() -> str:
     """The Postgres connection string.
@@ -39,7 +37,18 @@ def database_url() -> str:
 
 
 def redis_url() -> str:
-    return os.environ.get("REDIS_URL", DEFAULT_REDIS_URL)
+    """The Redis connection string.
+
+    REDIS_URL wins if set; otherwise built from REDIS_HOST/REDIS_PORT/REDIS_DB
+    so REDIS_PORT is the single knob (matching docker-compose's host port).
+    """
+    explicit = os.environ.get("REDIS_URL")
+    if explicit:
+        return explicit
+    host = os.environ.get("REDIS_HOST", "127.0.0.1")
+    port = os.environ.get("REDIS_PORT", "6379")
+    db_index = os.environ.get("REDIS_DB", "0")
+    return f"redis://{host}:{port}/{db_index}"
 
 
 def connect_pg(url: str | None = None) -> psycopg.Connection:

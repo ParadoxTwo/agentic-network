@@ -9,29 +9,28 @@ Status: **Phase 0** — the state store (`store/`) and message contract
 
 ## Quickstart
 
-Install dependencies and create your env file:
+One command — installs deps, starts Postgres + Redis, applies the schema:
+
+```bash
+make dev
+```
+
+It uses Docker if a daemon is available and falls back to native servers
+(`scripts/dev-services.sh`) in environments without one, like the web sandbox.
+Then run the full gate:
+
+```bash
+make check                # lint + typecheck + tests
+```
+
+`make help` lists every target. The manual equivalents, if you'd rather not
+use `make`:
 
 ```bash
 uv sync
 cp .env.example .env      # set POSTGRES_PASSWORD (the only required value)
-```
-
-Start the backing services (Postgres + Redis):
-
-```bash
-# Any machine with Docker:
-docker compose up -d
-
-# Or, in an environment without a Docker daemon (e.g. the web sandbox):
-scripts/dev-services.sh up
-```
-
-Run the checks:
-
-```bash
-uv run pytest -q          # integration tests (auto-skip if no store; retries startup)
-uv run ruff check .       # lint
-uv run mypy store schemas # typecheck
+docker compose up -d      # or: scripts/dev-services.sh up
+uv run pytest -q          # lint: ruff check .   types: mypy store schemas
 ```
 
 You set the password in **one** place — `POSTGRES_PASSWORD`. Docker Compose

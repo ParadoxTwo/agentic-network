@@ -124,22 +124,31 @@ At the end of the workflow, the orchestrator synthesizes a run summary:
 
 ## Implementation Plan
 
-### Phase 0: Scaffolding (this week)
-1. Set up Python 3.12 + uv + pytest
-2. Scaffold `docker-compose.yml` with **only the backing services** —
+### Phase 0: Scaffolding (this week) — DONE
+1. [x] Set up Python + uv + pytest (sandbox ships 3.11, so floored at >=3.11)
+2. [x] Scaffold `docker-compose.yml` with **only the backing services** —
    `postgres` + `redis` — so the store module has something to develop and
    run integration tests against. The full service topology (`api`,
    `orchestrator`, `worker`, `caddy`, code sandbox; see `deployment.md`) is
    deferred to Phase 5 — building it now would mean defining containers for
    services that don't exist yet. Grow this same file in later phases.
-3. Initialize Postgres schema (tasks, task_graph, runs)
-4. Initialize Redis connection
-5. Draft the task message schema (JSON schema)
-6. Create task queue client (enqueue, dequeue, mark_done, mark_failed)
-7. Create task log writer (append to tasks table)
-8. Write integration tests for store ops
+   (Daemonless envs use `scripts/dev-services.sh` for native servers.)
+3. [x] Initialize Postgres schema — `runs`, `tasks`, `task_graph`
+   (`store/schema.sql`, applied idempotently by `store.apply_schema`)
+4. [x] Initialize Redis connection (`store/db.py`)
+5. [x] Draft the task message schema — `schemas/message.py` (`TaskMessage`,
+   `AgentRole`, `TaskStatus`, `RunStatus`)
+6. [x] Task queue client — `store/queue.py` (enqueue, dequeue with reliable
+   processing-list reservation, mark_done, mark_failed w/ requeue + dead-letter)
+7. [x] Task log writer — `store/tasklog.py` (runs + tasks lifecycle, cost roll-up)
+8. [x] Integration tests for store ops — `tests/` (12 tests; ruff + mypy clean)
 
-**Deliverable**: a working `store/` module that orchestrator and agents can import.
+**Deliverable**: a working `store/` module that orchestrator and agents can import. ✅
+
+**Design note**: task STATUS is authoritative on `tasks`; `task_graph` holds only
+structure + ordering, so status can't drift between two tables. The Redis queue
+carries only `task_id` — the full typed task lives in Postgres (single source of
+truth).
 
 ### Phase 1: Orchestrator + GitHub integration
 1. Build the Orchestrator agent (Claude SDK)

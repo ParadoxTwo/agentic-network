@@ -9,10 +9,11 @@ Status: **Phase 0** — the state store (`store/`) and message contract
 
 ## Quickstart
 
-Install dependencies:
+Install dependencies and create your env file:
 
 ```bash
 uv sync
+cp .env.example .env      # set POSTGRES_PASSWORD (the only required value)
 ```
 
 Start the backing services (Postgres + Redis):
@@ -28,10 +29,15 @@ scripts/dev-services.sh up
 Run the checks:
 
 ```bash
-uv run pytest -q          # integration tests (auto-skip if the store is down)
+uv run pytest -q          # integration tests (auto-skip if no store; retries startup)
 uv run ruff check .       # lint
 uv run mypy store schemas # typecheck
 ```
+
+You set the password in **one** place — `POSTGRES_PASSWORD`. Docker Compose
+uses it for the server, and `store/db.py` builds the connection string from
+the same `POSTGRES_*` vars, so the app and database can't drift. Set
+`DATABASE_URL` only to point at an external/managed Postgres (it then wins).
 
 ## Layout
 
@@ -42,5 +48,5 @@ uv run mypy store schemas # typecheck
 | `docs/` | Plan and deployment design |
 | `scripts/` | Dev tooling (native Postgres/Redis for daemonless envs) |
 
-Connection strings default to the local dev services and are read from
-`DATABASE_URL` / `REDIS_URL` (see `.env.example`).
+Connection config is read from the environment (`POSTGRES_*`, optional
+`DATABASE_URL` / `REDIS_URL`); see `.env.example`.

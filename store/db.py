@@ -9,18 +9,33 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import quote
 
 import psycopg
 import redis
 
 _SCHEMA_SQL = Path(__file__).with_name("schema.sql")
 
-DEFAULT_DATABASE_URL = "postgresql://agentic:devpass@127.0.0.1:5432/agentic"
 DEFAULT_REDIS_URL = "redis://127.0.0.1:6379/0"
 
 
 def database_url() -> str:
-    return os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
+    """The Postgres connection string.
+
+    DATABASE_URL wins if set (e.g. a managed Postgres in prod). Otherwise we
+    build it from the same POSTGRES_* vars docker-compose reads, so the
+    password lives in exactly ONE place (POSTGRES_PASSWORD) and the app and
+    the database can't disagree.
+    """
+    explicit = os.environ.get("DATABASE_URL")
+    if explicit:
+        return explicit
+    user = os.environ.get("POSTGRES_USER", "agentic")
+    password = quote(os.environ.get("POSTGRES_PASSWORD", "devpass"), safe="")
+    host = os.environ.get("POSTGRES_HOST", "127.0.0.1")
+    port = os.environ.get("POSTGRES_PORT", "5432")
+    name = os.environ.get("POSTGRES_DB", "agentic")
+    return f"postgresql://{user}:{password}@{host}:{port}/{name}"
 
 
 def redis_url() -> str:

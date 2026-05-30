@@ -1,0 +1,68 @@
+# Phase 0 backing services only.
+#
+# This stands up the state store (Postgres) and queue (Redis) so the
+# `store/` module can be developed and integration-tested against real
+# services. The full application topology — api, orchestrator, worker,
+# caddy, and the code sandbox — is deferred to Phase 5 (see docs/plan.md
+# and docs/deployment.md). Grow THIS file as those services come online;
+# don't fork a second compose.
+#
+# Usage:
+#   cp .env.example .env   # then set POSTGRES_PASSWORD
+#   docker compose up -d
+#   docker compose ps      # both services should report healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agentic}
+      POSTGRES_DB: ${POSTGRES_DB:-agentic}
+      # No default password on purpose — must be set in .env so we never
+      # ship a known credential. Container refuses to start without it.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      # Exposed on localhost only for local dev (psql, tests). On a real
+      # VPS, drop this block so Postgres stays on the internal network.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Phase 0 integration tests should wait for this to pass before
+      # connecting. `pg_isready` scoped to our user/db.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agentic} -d ${POSTGRES_DB:-agentic}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - agentic
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # AOF on so an in-flight task queue survives a Redis restart
+    # (see deployment.md "Backups & ops").
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      # Localhost-only for dev; remove on the VPS to keep Redis internal.
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - agentic
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  agentic:
+    driver: bridge

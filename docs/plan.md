@@ -126,12 +126,18 @@ At the end of the workflow, the orchestrator synthesizes a run summary:
 
 ### Phase 0: Scaffolding (this week)
 1. Set up Python 3.12 + uv + pytest
-2. Initialize Postgres schema (tasks, task_graph, runs)
-3. Initialize Redis connection
-4. Draft the task message schema (JSON schema)
-5. Create task queue client (enqueue, dequeue, mark_done, mark_failed)
-6. Create task log writer (append to tasks table)
-7. Write integration tests for store ops
+2. Scaffold `docker-compose.yml` with **only the backing services** —
+   `postgres` + `redis` — so the store module has something to develop and
+   run integration tests against. The full service topology (`api`,
+   `orchestrator`, `worker`, `caddy`, code sandbox; see `deployment.md`) is
+   deferred to Phase 5 — building it now would mean defining containers for
+   services that don't exist yet. Grow this same file in later phases.
+3. Initialize Postgres schema (tasks, task_graph, runs)
+4. Initialize Redis connection
+5. Draft the task message schema (JSON schema)
+6. Create task queue client (enqueue, dequeue, mark_done, mark_failed)
+7. Create task log writer (append to tasks table)
+8. Write integration tests for store ops
 
 **Deliverable**: a working `store/` module that orchestrator and agents can import.
 

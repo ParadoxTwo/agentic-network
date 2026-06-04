@@ -53,7 +53,7 @@ def _connect_admin_with_retry(
     return None
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def _ensure_test_db() -> Iterator[None]:
     admin = _connect_admin_with_retry()
     if admin is None:
@@ -69,7 +69,7 @@ def _ensure_test_db() -> Iterator[None]:
 
 
 @pytest.fixture()
-def pg() -> Iterator[psycopg.Connection]:
+def pg(_ensure_test_db: None) -> Iterator[psycopg.Connection]:
     """A connection to the test DB, truncated clean before each test."""
     conn = psycopg.connect(_test_pg_url())
     with conn.cursor() as cur:

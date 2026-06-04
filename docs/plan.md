@@ -150,20 +150,37 @@ structure + ordering, so status can't drift between two tables. The Redis queue
 carries only `task_id` — the full typed task lives in Postgres (single source of
 truth).
 
-### Phase 1: Orchestrator + GitHub integration
-1. Build the Orchestrator agent (Claude SDK)
-   - Input: GitHub issue
-   - Decomposes to Designer task and Engineer task
-   - Polls task queue for Designer and Engineer results
-   - Passes Engineer output to Reviewer
-   - Synthesizes run summary and creates PR
-2. Add GitHub API client
-   - Read issues
-   - Create PRs
-   - Update PR description with trace
-3. Write orchestrator tests (mock agents, verify task graph)
+### Phase 1: Orchestrator + GitHub + real agents + triggers — DONE (all-in)
 
-**Deliverable**: orchestrator can read an issue, create a task graph, and verify completion.
+Built the full slice in one pass instead of the original tight scope:
+
+1. [x] GitHub client (`github/`) — issues, branches, multi-file commits (git
+   data API), PRs, merge, repo creation. Injectable transport; unit-tested.
+2. [x] Real agents (`agents/`) — Designer, Engineer (writes code, runs tests
+   via an Executor, retries on failure), Reviewer (rubric gate). LLM behind a
+   Protocol so tests use a fake; LocalExecutor for dev, DockerExecutor stub
+   for prod.
+3. [x] Orchestrator (`orchestrator/`) — per-run state machine
+   (design → engineer → review → PR/merge, with bounded rejection retries),
+   SKIP LOCKED run claiming, crash-safe worker.
+4. [x] Triggers (`triggers/`) — CLI, issue poller (deduped), FastAPI
+   webhook + `/runs` API (HMAC verify).
+5. [x] Service (`app/`) — long-running orchestrator loop + worker pool
+   (connection-per-thread), env-driven model tiers.
+6. [x] Tests — end-to-end run to merged PR, rejection→retry, engineer-failure;
+   GitHub/agent/trigger units. Faking only the LLM + GitHub; everything else is
+   the real path. ruff + mypy(strict) clean.
+
+**Deliverable**: a feature request (CLI/API/webhook) is taken end-to-end to a
+PR, with verification gates and full cost/task tracing. ✅
+
+**Live prerequisites**: `GITHUB_TOKEN` + `ANTHROPIC_API_KEY`. The Engineer runs
+tests via `LocalExecutor` in dev; untrusted-code sandboxing (DockerExecutor) is
+Phase 5 runtime work.
+
+**Phase 1 limitation (honest)**: the Engineer runs tests against the files it
+generates, not a full clone of the target repo. Repo-aware test execution needs
+the sandbox runtime (Phase 5), where the worker clones into the container.
 
 ### Phase 2: Designer agent
 1. Build Designer (Claude Sonnet, Code Interpreter capable)

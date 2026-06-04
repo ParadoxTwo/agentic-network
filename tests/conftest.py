@@ -95,5 +95,20 @@ def rds() -> Iterator[redis.Redis]:
     client.close()
 
 
+@pytest.fixture()
+def tasklog_factory(_ensure_test_db: None, pg: psycopg.Connection):
+    """A callable that opens a fresh TaskLog on the test DB (per-request style).
+
+    Mirrors how the webhook app gets a connection per request. Connections the
+    factory hands out are closed by the caller (the app does this).
+    """
+    from store.tasklog import TaskLog
+
+    def factory() -> "TaskLog":
+        return TaskLog(psycopg.connect(_test_pg_url()))
+
+    return factory
+
+
 # Let store.* pick up the test DB if any code reads the env directly.
 os.environ.setdefault("PYTEST_RUNNING", "1")

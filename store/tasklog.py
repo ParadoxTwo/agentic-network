@@ -26,6 +26,9 @@ class TaskLog:
     def __init__(self, conn: psycopg.Connection) -> None:
         self._conn = conn
 
+    def close(self) -> None:
+        self._conn.close()
+
     # --- runs -------------------------------------------------------------
 
     def create_run(
@@ -67,6 +70,12 @@ class TaskLog:
             ids = [r[0] for r in cur.fetchall()]
         self._conn.commit()
         return ids
+
+    def issue_ids_with_runs(self) -> set[int]:
+        """Issue numbers that already have a run — for poller de-duplication."""
+        with self._conn.cursor() as cur:
+            cur.execute("SELECT DISTINCT issue_id FROM runs")
+            return {r[0] for r in cur.fetchall()}
 
     def running_runs(self) -> list[UUID]:
         with self._conn.cursor() as cur:

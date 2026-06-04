@@ -12,8 +12,14 @@ CREATE TABLE IF NOT EXISTS runs (
     created_by    TEXT        NOT NULL,           -- the human owner
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     final_pr_url  TEXT,
-    total_cost_tokens BIGINT  NOT NULL DEFAULT 0
+    total_cost_tokens BIGINT  NOT NULL DEFAULT 0,
+    -- repo + feature spec: {owner, repo, base_branch, issue_number,
+    -- title, body, auto_merge}. Drives the GitHub work at the end of a run.
+    spec          JSONB       NOT NULL DEFAULT '{}'::jsonb
 );
+
+-- Forward-compat for databases created before `spec` existed.
+ALTER TABLE runs ADD COLUMN IF NOT EXISTS spec JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- One unit of work for one agent. Inputs/expected_output are the typed
 -- contract; output is filled in when the task completes.

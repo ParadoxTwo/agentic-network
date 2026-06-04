@@ -28,16 +28,53 @@ class TaskLog:
 
     # --- runs -------------------------------------------------------------
 
-    def create_run(self, issue_id: int, created_by: str) -> UUID:
+    def create_run(
+        self,
+        issue_id: int,
+        created_by: str,
+        spec: dict[str, Any] | None = None,
+    ) -> UUID:
         run_id = uuid4()
         with self._conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO runs (run_id, issue_id, created_by, status) "
-                "VALUES (%s, %s, %s, %s)",
-                (run_id, issue_id, created_by, RunStatus.PENDING.value),
+                "INSERT INTO runs (run_id, issue_id, created_by, status, spec) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (
+                    run_id,
+                    issue_id,
+                    created_by,
+                    RunStatus.PENDING.value,
+                    Jsonb(spec or {}),
+                ),
             )
         self._conn.commit()
         return run_id
+
+    def claim_pending_runs(self, limit: int = 10) -> list[UUID]:
+        """Atomically move up to `limit` pending runs to 'running'.
+
+        Uses SKIP LOCKED so multiple orchestrators never grab the same run.
+        Returns the claimed run_ids.
+        """
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "UPDATE runs SET status = %s WHERE run_id IN ("
+                "  SELECT run_id FROM runs WHERE status = %s "
+                "  ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT %s"
+                ") RETURNING run_id",
+                (RunStatus.RUNNING.value, RunStatus.PENDING.value, limit),
+            )
+            ids = [r[0] for r in cur.fetchall()]
+        self._conn.commit()
+        return ids
+
+    def running_runs(self) -> list[UUID]:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "SELECT run_id FROM runs WHERE status = %s ORDER BY created_at",
+                (RunStatus.RUNNING.value,),
+            )
+            return [r[0] for r in cur.fetchall()]
 
     def set_run_status(
         self, run_id: UUID, status: RunStatus, final_pr_url: str | None = None
@@ -122,6 +159,25 @@ class TaskLog:
                 )
         self._conn.commit()
 
+    def add_cost(self, task_id: UUID, cost_tokens: int) -> None:
+        """Add token cost to a task and roll it up to the run (no status change)."""
+        if not cost_tokens:
+            return
+        with self._conn.cursor() as cur:
+            cur.execute(
+                "UPDATE tasks SET cost_tokens = cost_tokens + %s WHERE task_id = %s "
+                "RETURNING run_id",
+                (cost_tokens, task_id),
+            )
+            row = cur.fetchone()
+            if row is not None:
+                cur.execute(
+                    "UPDATE runs SET total_cost_tokens = total_cost_tokens + %s "
+                    "WHERE run_id = %s",
+                    (cost_tokens, row[0]),
+                )
+        self._conn.commit()
+
     def fail_task(self, task_id: UUID, error: str) -> None:
         self._update(
             "UPDATE tasks SET status = %s, error = %s, completed_at = now() "
@@ -133,11 +189,16 @@ class TaskLog:
         return self._one("SELECT * FROM tasks WHERE task_id = %s", (task_id,))
 
     def list_tasks(self, run_id: UUID) -> list[dict[str, Any]]:
-        """All tasks for a run in graph order — the basis of a trace."""
+        """All tasks for a run in creation order — the basis of a trace.
+
+        Ordered by created_at (monotonic across retries) so the last element is
+        always the most recently created task. `seq` is a stage hint only; it
+        repeats across retries, so it can't define 'latest'.
+        """
         sql = (
             "SELECT t.* FROM tasks t "
             "JOIN task_graph g ON g.task_id = t.task_id "
-            "WHERE t.run_id = %s ORDER BY g.seq, t.created_at"
+            "WHERE t.run_id = %s ORDER BY t.created_at, g.seq"
         )
         with self._conn.cursor() as cur:
             cur.execute(sql, (run_id,))

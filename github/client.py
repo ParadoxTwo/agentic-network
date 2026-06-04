@@ -124,6 +124,16 @@ class GitHubClient:
 
     # --- files / commits --------------------------------------------------
 
+    def list_paths(self, owner: str, repo: str, ref: str) -> list[str]:
+        """All file paths in the repo at `ref` (recursive tree, blobs only)."""
+        sha = self.get_branch_sha(owner, repo, ref)
+        data = self._request(
+            "GET",
+            f"/repos/{owner}/{repo}/git/trees/{sha}",
+            params={"recursive": "1"},
+        )
+        return [t["path"] for t in data.get("tree", []) if t["type"] == "blob"]
+
     def get_file(
         self, owner: str, repo: str, path: str, *, ref: str
     ) -> str | None:
